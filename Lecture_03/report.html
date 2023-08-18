@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>report.html</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    let visibleString = getQueryParameter('visible') || 'all';
+    visibleString = visibleString.toLowerCase();
+    const checkedItems = visibleString.split(',');
+
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++) {
+        filterItems[i].hidden = false;
+
+        if (visibleString != 'all') {
+            filterItems[i].checked = checkedItems.includes(filterItems[i].getAttribute('data-test-result'));
+            filterTable(filterItems[i]);
+        }
+    }
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 15-Aug-2023 at 11:16:11 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <h2>Summary</h2>
+    <p>8 tests ran in 20.30 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">8 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestPositive::test_step1</td>
+          <td class="col-duration">9.14</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Start: 11:15:51.757057
+
+
+
+
+
+
+
+<br/> -----------------------------Captured stderr setup------------------------------ <br/>mkdir: невозможно создать каталог «/home/user/tst»: Файл существует
+mkdir: невозможно создать каталог «/home/user/tst»: Файл существует
+mkdir: невозможно создать каталог «/home/user/folder1»: Файл существует
+mkdir: невозможно создать каталог «/home/user/folder2»: Файл существует
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,0103634 s, 101 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00962824 s, 109 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00593092 s, 177 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,0342136 s, 30,6 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,0116104 s, 90,3 MB/s
+<br/> ------------------------------Captured stdout call------------------------------ <br/>
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Open archive: /home/user/out/arx.7z
+--
+Path = /home/user/out/arx.7z
+Type = 7z
+Physical Size = 32
+Headers Size = 0
+Solid = -
+Blocks = 0
+
+Scanning the drive:
+5 files, 5242880 bytes (5120 KiB)
+
+Updating archive: /home/user/out/arx.7z
+
+Items to compress: 5
+
+
+Files read from disk: 5
+Archive size: 5243370 bytes (5121 KiB)
+Everything is Ok
+
+arh1.7z
+arx1.7z
+arx2.7z
+arx.7z
+
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Finish: 11:16:00.940593
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestPositive::test_step2</td>
+          <td class="col-duration">1.92</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Start: 11:16:00.942939
+
+
+
+
+
+
+<br/> -----------------------------Captured stderr setup------------------------------ <br/>1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,0432194 s, 24,3 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,0133247 s, 78,7 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00643387 s, 163 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00597647 s, 175 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00600326 s, 175 MB/s
+<br/> ------------------------------Captured stdout call------------------------------ <br/>
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Open archive: /home/user/out/arx.7z
+--
+Path = /home/user/out/arx.7z
+Type = 7z
+Physical Size = 5243370
+Headers Size = 210
+Method = LZMA2:6m
+Solid = +
+Blocks = 1
+
+Scanning the drive:
+5 files, 5242880 bytes (5120 KiB)
+
+Updating archive: /home/user/out/arx.7z
+
+Items to compress: 5
+
+
+Files read from disk: 5
+Archive size: 10486611 bytes (11 MiB)
+Everything is Ok
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning the drive for archives:
+1 file, 10486611 bytes (11 MiB)
+
+Extracting archive: arx.7z
+--
+Path = arx.7z
+Type = 7z
+Physical Size = 10486611
+Headers Size = 291
+Method = LZMA2:6m
+Solid = +
+Blocks = 2
+
+Everything is Ok
+
+Files: 10
+Size:       10485760
+Compressed: 10486611
+
+5CVVA
+9KQY6
+9NX9Z
+B29PV
+IBP7Q
+QPIM8
+RH1QP
+SNTMZ
+SZC8B
+YOHCA
+
+5CVVA
+9KQY6
+9NX9Z
+B29PV
+IBP7Q
+QPIM8
+RH1QP
+SNTMZ
+SZC8B
+YOHCA
+
+5CVVA
+9KQY6
+9NX9Z
+B29PV
+IBP7Q
+QPIM8
+RH1QP
+SNTMZ
+SZC8B
+YOHCA
+
+5CVVA
+9KQY6
+9NX9Z
+B29PV
+IBP7Q
+QPIM8
+RH1QP
+SNTMZ
+SZC8B
+YOHCA
+
+5CVVA
+9KQY6
+9NX9Z
+B29PV
+IBP7Q
+QPIM8
+RH1QP
+SNTMZ
+SZC8B
+YOHCA
+
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Finish: 11:16:02.864470
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestPositive::test_step3</td>
+          <td class="col-duration">0.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Start: 11:16:02.866557
+<br/> ------------------------------Captured stdout call------------------------------ <br/>
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning the drive for archives:
+1 file, 10486611 bytes (11 MiB)
+
+Testing archive: arx.7z
+--
+Path = arx.7z
+Type = 7z
+Physical Size = 10486611
+Headers Size = 291
+Method = LZMA2:6m
+Solid = +
+Blocks = 2
+
+Everything is Ok
+
+Files: 10
+Size:       10485760
+Compressed: 10486611
+
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Finish: 11:16:02.928849
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestPositive::test_step4</td>
+          <td class="col-duration">1.33</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Start: 11:16:02.932673
+<br/> ------------------------------Captured stdout call------------------------------ <br/>
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning the drive:
+5 files, 5242880 bytes (5120 KiB)
+
+Creating archive: arx2.7z
+
+Items to compress: 5
+
+
+Files read from disk: 5
+Archive size: 5243379 bytes (5121 KiB)
+Everything is Ok
+
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Finish: 11:16:04.269890
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestPositive::test_step5</td>
+          <td class="col-duration">1.53</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Start: 11:16:04.273780
+
+
+
+
+
+
+<br/> -----------------------------Captured stderr setup------------------------------ <br/>1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00889118 s, 118 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,0126429 s, 82,9 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,0061757 s, 170 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00603907 s, 174 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00857977 s, 122 MB/s
+<br/> ------------------------------Captured stdout call------------------------------ <br/>
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Open archive: /home/user/out/arx.7z
+--
+Path = /home/user/out/arx.7z
+Type = 7z
+Physical Size = 10486611
+Headers Size = 291
+Method = LZMA2:6m
+Solid = +
+Blocks = 2
+
+Scanning the drive:
+5 files, 5242880 bytes (5120 KiB)
+
+Updating archive: /home/user/out/arx.7z
+
+Items to compress: 5
+
+
+Files read from disk: 5
+Archive size: 15729829 bytes (16 MiB)
+Everything is Ok
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning the drive for archives:
+1 file, 15729829 bytes (16 MiB)
+
+Listing archive: arx.7z
+
+--
+Path = arx.7z
+Type = 7z
+Physical Size = 15729829
+Headers Size = 349
+Method = LZMA2:6m
+Solid = +
+Blocks = 3
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2023-08-15 11:15:52 ....A      1048576      5243160  9NX9Z
+2023-08-15 11:15:52 ....A      1048576               B29PV
+2023-08-15 11:15:52 ....A      1048576               IBP7Q
+2023-08-15 11:15:52 ....A      1048576               QPIM8
+2023-08-15 11:15:52 ....A      1048576               SZC8B
+2023-08-15 11:16:01 ....A      1048576      5243160  5CVVA
+2023-08-15 11:16:01 ....A      1048576               9KQY6
+2023-08-15 11:16:00 ....A      1048576               RH1QP
+2023-08-15 11:16:01 ....A      1048576               SNTMZ
+2023-08-15 11:16:01 ....A      1048576               YOHCA
+2023-08-15 11:16:04 ....A      1048576      5243160  5CZ67
+2023-08-15 11:16:04 ....A      1048576               GWJ93
+2023-08-15 11:16:04 ....A      1048576               HCMFN
+2023-08-15 11:16:04 ....A      1048576               UINAR
+2023-08-15 11:16:04 ....A      1048576               XV6S1
+------------------- ----- ------------ ------------  ------------------------
+2023-08-15 11:16:04           15728640     15729480  15 files
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning the drive for archives:
+1 file, 15729829 bytes (16 MiB)
+
+Listing archive: arx.7z
+
+--
+Path = arx.7z
+Type = 7z
+Physical Size = 15729829
+Headers Size = 349
+Method = LZMA2:6m
+Solid = +
+Blocks = 3
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2023-08-15 11:15:52 ....A      1048576      5243160  9NX9Z
+2023-08-15 11:15:52 ....A      1048576               B29PV
+2023-08-15 11:15:52 ....A      1048576               IBP7Q
+2023-08-15 11:15:52 ....A      1048576               QPIM8
+2023-08-15 11:15:52 ....A      1048576               SZC8B
+2023-08-15 11:16:01 ....A      1048576      5243160  5CVVA
+2023-08-15 11:16:01 ....A      1048576               9KQY6
+2023-08-15 11:16:00 ....A      1048576               RH1QP
+2023-08-15 11:16:01 ....A      1048576               SNTMZ
+2023-08-15 11:16:01 ....A      1048576               YOHCA
+2023-08-15 11:16:04 ....A      1048576      5243160  5CZ67
+2023-08-15 11:16:04 ....A      1048576               GWJ93
+2023-08-15 11:16:04 ....A      1048576               HCMFN
+2023-08-15 11:16:04 ....A      1048576               UINAR
+2023-08-15 11:16:04 ....A      1048576               XV6S1
+------------------- ----- ------------ ------------  ------------------------
+2023-08-15 11:16:04           15728640     15729480  15 files
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning the drive for archives:
+1 file, 15729829 bytes (16 MiB)
+
+Listing archive: arx.7z
+
+--
+Path = arx.7z
+Type = 7z
+Physical Size = 15729829
+Headers Size = 349
+Method = LZMA2:6m
+Solid = +
+Blocks = 3
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2023-08-15 11:15:52 ....A      1048576      5243160  9NX9Z
+2023-08-15 11:15:52 ....A      1048576               B29PV
+2023-08-15 11:15:52 ....A      1048576               IBP7Q
+2023-08-15 11:15:52 ....A      1048576               QPIM8
+2023-08-15 11:15:52 ....A      1048576               SZC8B
+2023-08-15 11:16:01 ....A      1048576      5243160  5CVVA
+2023-08-15 11:16:01 ....A      1048576               9KQY6
+2023-08-15 11:16:00 ....A      1048576               RH1QP
+2023-08-15 11:16:01 ....A      1048576               SNTMZ
+2023-08-15 11:16:01 ....A      1048576               YOHCA
+2023-08-15 11:16:04 ....A      1048576      5243160  5CZ67
+2023-08-15 11:16:04 ....A      1048576               GWJ93
+2023-08-15 11:16:04 ....A      1048576               HCMFN
+2023-08-15 11:16:04 ....A      1048576               UINAR
+2023-08-15 11:16:04 ....A      1048576               XV6S1
+------------------- ----- ------------ ------------  ------------------------
+2023-08-15 11:16:04           15728640     15729480  15 files
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning the drive for archives:
+1 file, 15729829 bytes (16 MiB)
+
+Listing archive: arx.7z
+
+--
+Path = arx.7z
+Type = 7z
+Physical Size = 15729829
+Headers Size = 349
+Method = LZMA2:6m
+Solid = +
+Blocks = 3
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2023-08-15 11:15:52 ....A      1048576      5243160  9NX9Z
+2023-08-15 11:15:52 ....A      1048576               B29PV
+2023-08-15 11:15:52 ....A      1048576               IBP7Q
+2023-08-15 11:15:52 ....A      1048576               QPIM8
+2023-08-15 11:15:52 ....A      1048576               SZC8B
+2023-08-15 11:16:01 ....A      1048576      5243160  5CVVA
+2023-08-15 11:16:01 ....A      1048576               9KQY6
+2023-08-15 11:16:00 ....A      1048576               RH1QP
+2023-08-15 11:16:01 ....A      1048576               SNTMZ
+2023-08-15 11:16:01 ....A      1048576               YOHCA
+2023-08-15 11:16:04 ....A      1048576      5243160  5CZ67
+2023-08-15 11:16:04 ....A      1048576               GWJ93
+2023-08-15 11:16:04 ....A      1048576               HCMFN
+2023-08-15 11:16:04 ....A      1048576               UINAR
+2023-08-15 11:16:04 ....A      1048576               XV6S1
+------------------- ----- ------------ ------------  ------------------------
+2023-08-15 11:16:04           15728640     15729480  15 files
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning the drive for archives:
+1 file, 15729829 bytes (16 MiB)
+
+Listing archive: arx.7z
+
+--
+Path = arx.7z
+Type = 7z
+Physical Size = 15729829
+Headers Size = 349
+Method = LZMA2:6m
+Solid = +
+Blocks = 3
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2023-08-15 11:15:52 ....A      1048576      5243160  9NX9Z
+2023-08-15 11:15:52 ....A      1048576               B29PV
+2023-08-15 11:15:52 ....A      1048576               IBP7Q
+2023-08-15 11:15:52 ....A      1048576               QPIM8
+2023-08-15 11:15:52 ....A      1048576               SZC8B
+2023-08-15 11:16:01 ....A      1048576      5243160  5CVVA
+2023-08-15 11:16:01 ....A      1048576               9KQY6
+2023-08-15 11:16:00 ....A      1048576               RH1QP
+2023-08-15 11:16:01 ....A      1048576               SNTMZ
+2023-08-15 11:16:01 ....A      1048576               YOHCA
+2023-08-15 11:16:04 ....A      1048576      5243160  5CZ67
+2023-08-15 11:16:04 ....A      1048576               GWJ93
+2023-08-15 11:16:04 ....A      1048576               HCMFN
+2023-08-15 11:16:04 ....A      1048576               UINAR
+2023-08-15 11:16:04 ....A      1048576               XV6S1
+------------------- ----- ------------ ------------  ------------------------
+2023-08-15 11:16:04           15728640     15729480  15 files
+
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Finish: 11:16:05.806120
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestPositive::test_step6</td>
+          <td class="col-duration">2.63</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Start: 11:16:05.808462
+
+
+
+
+
+
+
+
+<br/> -----------------------------Captured stderr setup------------------------------ <br/>1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00736157 s, 142 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00599267 s, 175 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00608825 s, 172 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,0189684 s, 55,3 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00604421 s, 173 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00618329 s, 170 MB/s
+<br/> ------------------------------Captured stdout call------------------------------ <br/>
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Open archive: /home/user/out/arx.7z
+--
+Path = /home/user/out/arx.7z
+Type = 7z
+Physical Size = 15729829
+Headers Size = 349
+Method = LZMA2:6m
+Solid = +
+Blocks = 3
+
+Scanning the drive:
+1 folder, 6 files, 6291456 bytes (6144 KiB)
+
+Updating archive: /home/user/out/arx.7z
+
+Items to compress: 7
+
+
+Files read from disk: 6
+Archive size: 22021727 bytes (22 MiB)
+Everything is Ok
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning the drive for archives:
+1 file, 22021727 bytes (22 MiB)
+
+Extracting archive: arx.7z
+--
+Path = arx.7z
+Type = 7z
+Physical Size = 22021727
+Headers Size = 454
+Method = LZMA2:6m
+Solid = +
+Blocks = 4
+
+Everything is Ok
+
+Folders: 1
+Files: 21
+Size:       22020096
+Compressed: 22021727
+
+4734M
+5CVVA
+5CZ67
+8OKUF
+9KQY6
+9NX9Z
+B29PV
+DKPZZ
+GWJ93
+HCMFN
+IBP7Q
+M5BCL
+QPIM8
+RH1QP
+RMEB7
+SNTMZ
+SZC8B
+TPEVH
+UINAR
+XV6S1
+YOHCA
+
+4734M
+5CVVA
+5CZ67
+8OKUF
+9KQY6
+9NX9Z
+B29PV
+DKPZZ
+GWJ93
+HCMFN
+IBP7Q
+M5BCL
+QPIM8
+RH1QP
+RMEB7
+SNTMZ
+SZC8B
+TPEVH
+UINAR
+XV6S1
+YOHCA
+
+4734M
+5CVVA
+5CZ67
+8OKUF
+9KQY6
+9NX9Z
+B29PV
+DKPZZ
+GWJ93
+HCMFN
+IBP7Q
+M5BCL
+QPIM8
+RH1QP
+RMEB7
+SNTMZ
+SZC8B
+TPEVH
+UINAR
+XV6S1
+YOHCA
+
+4734M
+5CVVA
+5CZ67
+8OKUF
+9KQY6
+9NX9Z
+B29PV
+DKPZZ
+GWJ93
+HCMFN
+IBP7Q
+M5BCL
+QPIM8
+RH1QP
+RMEB7
+SNTMZ
+SZC8B
+TPEVH
+UINAR
+XV6S1
+YOHCA
+
+4734M
+5CVVA
+5CZ67
+8OKUF
+9KQY6
+9NX9Z
+B29PV
+DKPZZ
+GWJ93
+HCMFN
+IBP7Q
+M5BCL
+QPIM8
+RH1QP
+RMEB7
+SNTMZ
+SZC8B
+TPEVH
+UINAR
+XV6S1
+YOHCA
+
+4734M
+5CVVA
+5CZ67
+8OKUF
+9KQY6
+9NX9Z
+B29PV
+DKPZZ
+GWJ93
+HCMFN
+IBP7Q
+M5BCL
+QPIM8
+RH1QP
+RMEB7
+SNTMZ
+SZC8B
+TPEVH
+UINAR
+XV6S1
+YOHCA
+
+OKL6P
+
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Finish: 11:16:08.441997
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestPositive::test_step7</td>
+          <td class="col-duration">0.02</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Start: 11:16:08.445035
+<br/> ------------------------------Captured stdout call------------------------------ <br/>
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Open archive: arx.7z
+--
+Path = arx.7z
+Type = 7z
+Physical Size = 22021727
+Headers Size = 454
+Method = LZMA2:6m
+Solid = +
+Blocks = 4
+
+Updating archive: arx.7z
+
+Items to compress: 0
+
+
+Files read from disk: 0
+Archive size: 32 bytes (1 KiB)
+Everything is Ok
+
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Finish: 11:16:08.470982
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestPositive::test_step8</td>
+          <td class="col-duration">3.20</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>Start: 11:16:08.472422
+
+
+
+
+
+
+<br/> -----------------------------Captured stderr setup------------------------------ <br/>1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00632101 s, 166 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00630658 s, 166 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00612253 s, 171 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00628416 s, 167 MB/s
+1+0 записей получено
+1+0 записей отправлено
+1048576 байт (1,0 MB, 1,0 MiB) скопирован, 0,00719602 s, 146 MB/s
+<br/> ------------------------------Captured stdout call------------------------------ <br/>
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning
+1 file, 1048576 bytes (1024 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+70A3EAD9       1048576  D203W
+-------- -------------  ------------
+70A3EAD9       1048576  
+
+Size: 1048576
+
+CRC32  for data:              70A3EAD9
+
+Everything is Ok
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning
+1 file, 1048576 bytes (1024 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+70A3EAD9       1048576  D203W
+-------- -------------  ------------
+70A3EAD9       1048576  
+
+Size: 1048576
+
+CRC32  for data:              70A3EAD9
+
+Everything is Ok
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning
+1 file, 1048576 bytes (1024 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+086E437B       1048576  4TIS3
+-------- -------------  ------------
+086E437B       1048576  
+
+Size: 1048576
+
+CRC32  for data:              086E437B
+
+Everything is Ok
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning
+1 file, 1048576 bytes (1024 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+086E437B       1048576  4TIS3
+-------- -------------  ------------
+086E437B       1048576  
+
+Size: 1048576
+
+CRC32  for data:              086E437B
+
+Everything is Ok
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning
+1 file, 1048576 bytes (1024 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+1A4BDE34       1048576  19GB6
+-------- -------------  ------------
+1A4BDE34       1048576  
+
+Size: 1048576
+
+CRC32  for data:              1A4BDE34
+
+Everything is Ok
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning
+1 file, 1048576 bytes (1024 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+1A4BDE34       1048576  19GB6
+-------- -------------  ------------
+1A4BDE34       1048576  
+
+Size: 1048576
+
+CRC32  for data:              1A4BDE34
+
+Everything is Ok
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning
+1 file, 1048576 bytes (1024 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+F24D0693       1048576  VY2MK
+-------- -------------  ------------
+F24D0693       1048576  
+
+Size: 1048576
+
+CRC32  for data:              F24D0693
+
+Everything is Ok
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning
+1 file, 1048576 bytes (1024 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+F24D0693       1048576  VY2MK
+-------- -------------  ------------
+F24D0693       1048576  
+
+Size: 1048576
+
+CRC32  for data:              F24D0693
+
+Everything is Ok
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning
+1 file, 1048576 bytes (1024 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+A21CB230       1048576  05IAK
+-------- -------------  ------------
+A21CB230       1048576  
+
+Size: 1048576
+
+CRC32  for data:              A21CB230
+
+Everything is Ok
+
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=ru_RU.UTF-8,Utf16=on,HugeFiles=on,64 bits,2 CPUs Intel(R) Core(TM) i7-3537U CPU @ 2.00GHz (306A9),ASM,AES-NI)
+
+Scanning
+1 file, 1048576 bytes (1024 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+A21CB230       1048576  05IAK
+-------- -------------  ------------
+A21CB230       1048576  
+
+Size: 1048576
+
+CRC32  for data:              A21CB230
+
+Everything is Ok
+
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Finish: 11:16:11.672444
+<br/></div></td></tr></tbody></table></body></html>
